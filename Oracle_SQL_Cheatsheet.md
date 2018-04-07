@@ -3,13 +3,22 @@
 ## Table of contents
 
 1. ETL statements
-2. Union functions
+2. Union operations
 3. Window functions
 4. DB management utilities
 5. Special query clauses
-6. Data types and global constants in Oracle SQL
+6. Data types
+7. Global constants in Oracle SQL
 
 ## 1. ETL statements
+
+Chapter contents:
+
+1. `CREATE TABLE` vs `CREATE VIEW`
+2. `INSERT INTO`
+3. `UPDATE`
+4. `DELETE`
+
 ### 1.1. `CREATE TABLE` vs `CREATE VIEW`
 #### `CREATE TABLE` Statement
 The `CREATE TABLE` statement is used to create a new table in a database.
@@ -196,25 +205,346 @@ WHERE t1.supplier_id IN (
 ;
 ```
 
-## 2. Union functions
+## 2. Union operations
+
+Chapter contents:
+
+1. `UNION`
+2. `INTERSECT`
+3. `MINUS`
+
+### Common basic requirements for union functions
+
+- Same number of columns
+- Similar data types
+- Same order of columns
+
+### 2.1. `UNION [ALL]`
+
+`UNION` operator returns only distinct rows that appear in either result. `ALL` operator does not eliminate duplicate rows.
+
+### 2.2. `INTERSECT`
+
+Yields only those rows returned by both queries.
+
+### 2.3. `MINUS`
+
+Yields only unique rows returned by the first query but not the second.
+
+### Query example for union operations
+
+```sql
+CREATE TABLE final_table AS
+SELECT * FROM table_1
+{UNION [ALL]|INTERSECT|MINUS}
+SELECT * from table_2;
+```
 
 ## 3. Window functions
 
+A window function performs a calculation across a set of table rows that are somehow related to the current row. This is comparable to the type of calculation that can be done with an aggregate function. But, unlike regular aggregate functions, use of a window function does not cause the rows to become grouped into a single output row; **the rows retain their separate identities**. Behind the scenes, the window function is able to access more than just the current row of the query result.
+
+### General example and overview
+
+```sql
+SELECT
+    AGGREGATION(var1)
+    OVER -- Designates a window function
+        (
+            /* PARTITION BY narrows the window from the entire dataset
+            to individual groups within the dataset */
+            [PARTITION BY partition_var]
+            /* ORDER BY creates a running total. Without it, each value
+            will be an aggregation of var1 within its respective partition_var
+            group (akin to a remerged GROUP BY) */
+            [ORDER BY order_var]
+        ) -- Window specification
+        /* The ORDER and PARTITION define what is referred to as the "window" - the ordered subset of data over which calculations are made */
+FROM ...
+;
+```
+
+### Window function possibilities
+
+| Aggregation Function | Description    |
+| :------------- | :------------- |
+| `SUM()`, `COUNT()`, `AVG() `      | Pretty straightforward |
+| `ROW_NUMBER()`   | Displays the number of a given row. It starts at 1 and numbers the rows according to the `ORDER BY` clause of the window specification  |
+| `RANK()`  | Like `ROW_NUMBER()`, but repeating the resulting value for identical rows. Resumes next row's value where `ROW_NUMBER()` would, if it is not identical.  |
+| `DENSE_RANK()`  | Like `RANK()`, but instead of resuming where `ROW_NUMBER()` would, it does at last returned value + 1.  |
+| `NTILE(n_groups)`  | Whatever percentile or other subdivision (as set by `n_groups`). For 2 records, it would just create 1st and 2nd percentile, instead of 1 and 100. Keep in mind to use small bands when working with `NTILE()` over small windows.  |
+| `LAG ( expression [, offset [, default] ] )`  | **Returns values from a previous row in the table**. Creates null values at the beginning of the dataset. `expression`: An expression that can contain other built-in functions, but can not contain any analytic functions. `offset`: It is the physical offset from the current row in the table. If this parameter is omitted, the default is 1. `default`: It is the value that is returned if the offset goes out of the bounds of the table. If this parameter is omitted, the default is null. |
+| `LEAD ( expression [, offset [, default] ] )`  | Same as `LAG()`, but with next rows in the table. Creates null values at the end of the dataset. |
+
 ## 4. DB Management utilities
+
+Chapter content:
+
+1. `ALTER TABLE`
+2. Constraints
+3. Indexes
+
+### 4.1. `ALTER TABLE`
+
+The ALTER TABLE statement, as its name already indicates, allows adding, deleting or modifying columns/constraints in a table after it has been created, among other utilities.
+
+```sql
+-- Adding multiple columns
+ALTER TABLE customers
+ADD (
+    customer_name varchar2(45),
+    city varchar2(40) DEFAULT 'Seattle'
+);
+
+-- Dropping a column
+ALTER TABLE table_name
+DROP COLUMN column_name;
+
+-- Modifying multiple columns
+ALTER TABLE customers
+MODIFY (
+    customer_name varchar2(100) NOT NULL,
+    city varchar2(75) DEFAULT 'Seattle' NOT NULL
+);
+
+-- Renaming a column
+ALTER TABLE customers
+  RENAME COLUMN customer_name TO cname;
+
+-- Renaming a table
+ALTER TABLE table_name
+  RENAME TO new_table_name;
+```
+
+### 4.2. Constraints
+SQL constraints are used to specify **rules** for data in a table. If there is any violation between the constraint and the data action, the action is aborted. Constraints can be specified when the table is created with the `CREATE TABLE` statement, or after the table is created with the `ALTER TABLE` statement.
+
+The following constraints are commonly used in SQL:
+- `NOT NULL`: Ensures that a column **cannot** have a `NULL` **value**
+- `UNIQUE`: Ensures that all **values** in a column are **different**
+- `PRIMARY KEY`: A **combination** of a `NOT NULL` and `UNIQUE`. **Uniquely** identifies **each row** in a table
+- `FOREIGN KEY`: **Uniquely** identifies a row/record in **another table**
+- `CHECK`: Ensures that all values in a column satisfies a **specific condition**
+- `DEFAULT`: Sets a **default value** for a column when no value is specified
+
+**What is the difference between a `UNIQUE` constraint and a `PRIMARY KEY`?**
+
+| Primary Key	 | Unique Constraint     |
+| :------------- | :------------- |
+| None of the fields that are part of the primary key can contain a null value.       | 	Some of the fields that are part of the unique constraint can contain null values as long as the combination of values is unique.       |
+
+#### `NOT NULL`
+
+```sql
+-- In CREATE TABLE statement:
+CREATE TABLE Persons (
+    ID int NOT NULL,
+    LastName varchar(255) NOT NULL,
+    FirstName varchar(255) NOT NULL,
+    Age int NOT NULL
+);
+-- In ALTER TABLE statement:
+ALTER TABLE customers
+MODIFY (
+    ID int NOT NULL, -- Column type still has to be declared
+    LastName varchar(255) NOT NULL,
+    FirstName varchar(255) NOT NULL,
+    Age int NOT NULL
+);
+```
+
+#### `UNIQUE`
+A unique constraint is a single field or combination of fields that uniquely defines a record. Some of the fields can contain null values as long as the combination of values is unique.
+
+```sql
+-- In CREATE TABLE statement:
+CREATE TABLE table_name
+(
+    column1 datatype [ NULL | NOT NULL ],
+    column2 datatype [ NULL | NOT NULL ],
+    ...
+    CONSTRAINT constraint_name UNIQUE (uc_col1, uc_col2, ... uc_col_n)
+);
+-- In ALTER TABLE statement:
+ALTER TABLE table_name
+ADD CONSTRAINT constraint_name UNIQUE (uc_col1, uc_col2, ... uc_col_n);
+```
+
+#### `PRIMARY KEY`
+In Oracle, a primary key is a single field or combination of fields that **uniquely defines a record**. None of the fields that are part of the primary key can contain a null value. A table can have **only one primary key**.
+
+```sql
+-- In CREATE TABLE statement (single column):
+CREATE TABLE table_name
+(
+    id datatype PRIMARY KEY,
+    column1 datatype [ NULL | NOT NULL ],
+    ...
+);
+-- In CREATE TABLE statement (multiple columns):
+CREATE TABLE table_name
+(
+    column1 datatype,
+    column2 datatype,
+    ...
+    CONSTRAINT constraint_name PRIMARY KEY (column1, column2, ... column_n)
+);
+-- In ALTER TABLE statement (single column):
+ALTER TABLE table_name
+MODIFY (id datatype PRIMARY KEY);
+-- In ALTER TABLE statement (multiple columns):
+ALTER TABLE table_name
+ADD CONSTRAINT constraint_name PRIMARY KEY (column1, column2, ... column_n);
+```
+
+#### `FOREIGN KEY`
+
+TODO: ALTER TABLE to modify, drop or disable constraints.
 
 ## 5. Special query clauses
 
-## 6. Data types and global constants in Oracle SQL
+Chapter contents:
 
-### Character data types
+1. `WITH` clause
+2. `LIKE` clause
+3. Hints
+
+### 5.1. `WITH` clause
+
+The `WITH` clause may be processed as an **inline view** or resolved as a **temporary table**. The advantage of the latter is that repeated references to the subquery may be more efficient as the data is easily retrieved from the temporary table, rather than being requeried by each reference. You should assess the performance implications of the WITH clause on a case-by-case basis.
+
+#### `WITH` clause example
+So that we don't need to redefine the same subquery multiple times, we just use the query name defined in the `WITH` clause, making the query much easier to read.
+
+```sql
+-- Without WITH clause:
+SELECT
+    e.ename AS employee_name,
+    dc1.dept_count AS emp_dept_count,
+    m.ename AS manager_name,
+    dc2.dept_count AS mgr_dept_count
+FROM emp e
+JOIN (
+    SELECT
+        deptno,
+        COUNT(*) AS dept_count
+    FROM emp
+    GROUP BY deptno
+) dc1
+    ON e.deptno = dc1.deptno
+JOIN emp m
+    ON e.mgr = m.empno
+JOIN (
+    SELECT
+        deptno,
+        COUNT(*) AS dept_count
+        FROM emp
+        GROUP BY deptno
+) dc2
+    ON m.deptno = dc2.deptno;
+
+-- With WITH clause:
+WITH dept_count AS (
+    SELECT
+        deptno,
+        COUNT(*) AS dept_count
+    FROM emp
+    GROUP BY deptno
+)
+SELECT
+    e.ename AS employee_name,
+    dc1.dept_count AS emp_dept_count,
+    m.ename AS manager_name,
+    dc2.dept_count AS mgr_dept_count
+FROM emp e
+JOIN dept_count dc1
+    ON e.deptno = dc1.deptno
+JOIN emp m
+    ON e.mgr = m.empno
+JOIN dept_count dc2
+    ON m.deptno = dc2.deptno;
+```
+
+If the contents of the `WITH` clause are sufficiently complex, Oracle may decide to resolve the result of the subquery into a **global temporary table**. This can make **multiple references** to the subquery more efficient. The `MATERIALIZE` and `INLINE` optimizer hints can be used to influence the decision.
+
+### 5.2. `LIKE` clause
+The `LIKE` conditions specify a test involving **pattern matching**. Whereas the **equality operator (=) exactly matches** one character value to another, the `LIKE` conditions match a **portion** of one character value to another by searching the first value for the pattern specified by the second.
+
+#### Using the ESCAPE clause:
+The ESCAPE clause identifies `&` as the escape character. In the pattern, the escape character precedes the underscore. This causes Oracle to interpret the underscore literally, rather than as a special pattern matching character.
+
+The following example searches for employees with the pattern `A_B` in their name:
+
+```sql
+SELECT last_name
+    FROM employees
+    WHERE last_name LIKE '%A&_B%' ESCAPE '&';
+```
+
+### 5.3. Hints
+An optimizer hint is a code snippet within an SQL statement controlling the decisions of the optimizer. The syntax is as follows:
+
+`{DELETE|INSERT|SELECT|UPDATE} /*+ hint [text] [hint [text]] */`
+
+#### Parallel processing
+**PARALLEL** _(table n)_: This hint tells the optimizer to use n concurrent servers for a parallel operation:
+
+```sql
+/*+ PARALLEL my_table 16 */
+```
+
+#### `MATERIALIZE` & `INLINE`
+
+The undocumented `MATERIALIZE` hint tells the optimizer to resolve the subquery as a **global temporary table**, while the `INLINE` hint tells it to process the query **inline**.
+
+```sql
+-- Materialize hint
+WITH dept_count AS (
+  SELECT /*+ MATERIALIZE */
+    deptno,
+    COUNT(*) AS dept_count
+  FROM emp
+  GROUP BY deptno
+)
+SELECT ...
+
+-- Inline hint
+WITH dept_count AS (
+  SELECT /*+ INLINE */
+    deptno,
+    COUNT(*) AS dept_count
+  FROM emp
+  GROUP BY deptno
+)
+SELECT ...
+```
+
+## 6. Data types in Oracle SQL
+
+Chapter contents:
+
+1. Character data types
+2. Numeric data types
+3. Date / Time data types
+
+### 6.1. Character data types
 
 | Data Type Syntax | Explanation |
 | :--------------- | :---------- |
-| char(size)   | Where size is the number of characters to store. Fixed-length strings. Space padded.   |
-| varchar2(size)  | Where size is the number of characters to store. Variable-length string.  |
+| `char(size)`   | Where size is the number of characters to store. Fixed-length strings. Space padded.   |
+| `varchar2(size)`  | Where size is the number of characters to store. Variable-length string.  |
 
-### Numeric data types
+### 6.2. Numeric data types
+
 | Data Type Syntax     | Explanation     |
 | :------------- | :------------- |
-| number(p,s)      | Where p is the precision and s is the scale. For example, number(7,2) is a number that has 5 digits before the decimal and 2 digits after the decimal.       |
-|   |   |
+| `number(p,s)`      | Where `p` is the precision and `s` is the scale. For example, `number(7,2)` is a number that has 5 digits before the decimal and 2 digits after the decimal. This is the super-type for all the numeric data types available in PL/SQL. This stores positive, negative, zero and floating point numbers. Precision can range from 1 to 38. Scale can range from -84 to 127.      |
+
+### 6.3. Date / Time data types
+
+| Data Type Syntax     | Explanation     |
+| :------------- | :------------- |
+| `date`       | A date between Jan 1, 4712 BC and Dec 31, 9999 AD.       |
+| `timestamp` (fractional seconds precision)  | Fractional seconds precision must be a number between 0 and 9 (default is 6). Includes year, month, day, hour, minute, and seconds. For example: `timestamp(6)`  |
+
+## 7. Global constants in Oracle SQL
