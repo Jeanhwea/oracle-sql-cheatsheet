@@ -259,7 +259,8 @@ SELECT
             group (akin to a remerged GROUP BY) */
             [ORDER BY order_var]
         ) -- Window specification
-        /* The ORDER and PARTITION define what is referred to as the "window" - the ordered subset of data over which calculations are made */
+        /* The ORDER and PARTITION define what is referred to as the "window" -
+        the ordered subset of data over which calculations are made */
 FROM ...
 ;
 ```
@@ -327,6 +328,12 @@ The following constraints are commonly used in SQL:
 - `CHECK`: Ensures that all values in a column satisfies a **specific condition**
 - `DEFAULT`: Sets a **default value** for a column when no value is specified
 
+Constraints may exist in either of these 4 states:
+
+
+
+> **Modifying constraints:** There is no way of modifying a constraint. In order to modify it, you will need to drop it and re-create it.
+
 **What is the difference between a `UNIQUE` constraint and a `PRIMARY KEY`?**
 
 | Primary Key	 | Unique Constraint     |
@@ -334,6 +341,10 @@ The following constraints are commonly used in SQL:
 | None of the fields that are part of the primary key can contain a null value.       | 	Some of the fields that are part of the unique constraint can contain null values as long as the combination of values is unique.       |
 
 #### `NOT NULL`
+
+##### Create `NOT NULL` constraint
+
+By default, a column can hold `NULL`. If you do not want to allow `NULL` value in a column, you will want to place the `NOT NULL` constraint on this column. The `NOT NULL` constraint specifies that `NULL` is not an allowable value.
 
 ```sql
 -- In CREATE TABLE statement:
@@ -353,53 +364,176 @@ MODIFY (
 );
 ```
 
-#### `UNIQUE`
-A unique constraint is a single field or combination of fields that uniquely defines a record. Some of the fields can contain null values as long as the combination of values is unique.
+##### Drop (alter) `NOT NULL` constraint
+
+The `NOT NULL` constraint may not be dropped, since a variable will always be either `NULL` or `NOT NULL`. Therefore, this characteristic may only be switched through an `ALTER TABLE` statement:
 
 ```sql
--- In CREATE TABLE statement:
+ALTER TABLE customers
+MODIFY (
+    -- Either NULL or NOT NULL must be specified in order to alter the constraint
+    -- Otherwise, the previous constraint will prevail
+    ID int NULL,
+    LastName varchar(255) NULL,
+    FirstName varchar(255) NULL,
+    Age int NULL
+);
+```
+
+#### `UNIQUE`
+A unique constraint is a single field or combination of fields that uniquely defines a record. Some of the fields can contain null values as long as the combination of values is unique. **Multiple UNIQUE constraints can be defined on a table**.
+
+##### Create `UNIQUE` constraint
+
+```sql
+-- In CREATE TABLE statement (single column(s), no constraint name):
 CREATE TABLE table_name
 (
-    column1 datatype [ NULL | NOT NULL ],
-    column2 datatype [ NULL | NOT NULL ],
+    column1 datatype [UNIQUE],
+    column2 datatype [UNIQUE],
     ...
-    CONSTRAINT constraint_name UNIQUE (uc_col1, uc_col2, ... uc_col_n)
+    /* If we set the UNIQUE constraint separately on both columns, it will
+    evaluate value duplicity ON A COLUMN BY COLUMN BASIS, i.e. if we insert
+    values (1, 'A') and (1, 'B'), it will raise an error because there are two
+    1's in column1, even though the combination of values is unique. */
 );
--- In ALTER TABLE statement:
+
+-- In CREATE TABLE statement (single/multiple columns, with constraint name):
+CREATE TABLE table_name
+(
+    column1 datatype,
+    column2 datatype,
+    ...
+    CONSTRAINT constraint_name UNIQUE (uc_col1 [, uc_col2, ... uc_col_n])
+);
+
+-- In ALTER TABLE statement (single column(s), no constraint name):
 ALTER TABLE table_name
-ADD CONSTRAINT constraint_name UNIQUE (uc_col1, uc_col2, ... uc_col_n);
+MODIFY (column1 datatype [UNIQUE], column2 datatype [UNIQUE], ...);
+/* Same reasoning as CREATE TABLE applies */
+
+-- In ALTER TABLE statement (single/multiple columns, with constraint name):
+ALTER TABLE table_name
+ADD CONSTRAINT constraint_name UNIQUE (uc_col1 [, uc_col2, ... uc_col_n]);
+```
+
+##### Drop `UNIQUE` constraint
+
+```sql
+-- In ALTER TABLE statement (single column(s), no constraint name):
+ALTER TABLE table_name
+DROP UNIQUE(column1)
+DROP UNIQUE(column2)
+...;
+
+-- In ALTER TABLE statement (single/multiple columns, with constraint name):
+ALTER TABLE table_name
+DROP CONSTRAINT constraint_name;
 ```
 
 #### `PRIMARY KEY`
 In Oracle, a primary key is a single field or combination of fields that **uniquely defines a record**. None of the fields that are part of the primary key can contain a null value. A table can have **only one primary key**.
 
+##### Create `PRIMARY KEY` constraint
+
 ```sql
--- In CREATE TABLE statement (single column):
+-- In CREATE TABLE statement (single column, no constraint name):
 CREATE TABLE table_name
 (
     id datatype PRIMARY KEY,
     column1 datatype [ NULL | NOT NULL ],
     ...
 );
--- In CREATE TABLE statement (multiple columns):
+
+-- In CREATE TABLE statement (single/multiple columns, with constraint name):
 CREATE TABLE table_name
 (
     column1 datatype,
     column2 datatype,
     ...
-    CONSTRAINT constraint_name PRIMARY KEY (column1, column2, ... column_n)
+    CONSTRAINT constraint_name PRIMARY KEY (column1 [, column2, ... column_n])
 );
--- In ALTER TABLE statement (single column):
+
+-- In ALTER TABLE statement (single column, no constraint name):
 ALTER TABLE table_name
 MODIFY (id datatype PRIMARY KEY);
--- In ALTER TABLE statement (multiple columns):
+
+-- In ALTER TABLE statement (single/multiple column/s, with constraint name):
 ALTER TABLE table_name
-ADD CONSTRAINT constraint_name PRIMARY KEY (column1, column2, ... column_n);
+ADD CONSTRAINT constraint_name PRIMARY KEY (column1 [, column2, ... column_n]);
+```
+
+##### Drop `PRIMARY KEY` constraint
+
+```sql
+-- In ALTER TABLE statement (single/multiple column/s, no constraint name):
+ALTER TABLE table_name
+DELETE PRIMARY KEY;
+
+-- In ALTER TABLE statement (single/multiple column/s, with constraint name):
+ALTER TABLE table_name
+DROP CONSTRAINT constraint_name;
 ```
 
 #### `FOREIGN KEY`
+A foreign key is a column (or columns) that references a column (most often the primary key) of another table. The purpose of the foreign key is to ensure **referential integrity** of the data. In other words, only **values that are supposed to appear** in the database are permitted.
 
-TODO: ALTER TABLE to modify, drop or disable constraints.
+For example, say we have two tables, a `CUSTOMER` table that includes all customer data, and an `ORDERS` table that includes all customer orders. Business logic requires that all orders must be associated with a customer that is already in the `CUSTOMER` table. To enforce this logic, we place a foreign key on the `ORDERS` table and have it reference the primary key of the `CUSTOMER` table. This way, we can ensure that all orders in the `ORDERS` table are related to a customer in the `CUSTOMER` table. In other words, the `ORDERS` table cannot contain information on a customer that is not in the `CUSTOMER` table.
+
+##### Create `FOREIGN KEY` constraint
+
+```sql
+-- In CREATE TABLE statement (single column, no constraint name):
+CREATE TABLE ORDERS (
+    Order_ID int PRIMARY KEY,
+    Order_Date date,
+    Customer_SID int REFERENCES CUSTOMER(SID), -- FOREIGN KEY constraint
+    -- Single-column FOREIGN KEY == Single-column reference
+    /* In this case, since the constraint declaration is in-line, no custom constraint name has been generated. Therefore, Oracle generates a default constraint name. This is considered bad practice, since in case you need to modify the constraint, you will need to find out its name from among a list of other constraints in the USER_CONSTRAINTS table */
+    Amount double
+);
+
+-- In CREATE TABLE statement (single/multiple column/s, with constraint name):
+CREATE TABLE table_name
+(
+  column1 datatype,
+  column2 datatype,
+  ...
+
+  CONSTRAINT constraint_name
+    FOREIGN KEY (column1 [, column2, ... column_n])
+    REFERENCES parent_table(p_column1 [, p_column2, ... p_column_n])
+);
+
+-- In ALTER TABLE statement (single column, no constraint name):
+ALTER TABLE ORDERS
+MODIFY (Customer_SID int REFERENCES CUSTOMER(SID));
+
+-- In ALTER TABLE statement (single/multiple column/s, with constraint name):
+ALTER TABLE table_name
+ADD CONSTRAINT constraint_name
+    FOREIGN KEY (column1 [, column2, ... column_n])
+    REFERENCES parent_table(p_column1 [, p_column2, ... p_column_n]);
+```
+
+##### Drop `FOREIGN KEY` constraint
+
+In order to drop a `FOREIGN KEY`, the generic `ALTER TABLE ... DROP CONSTRAINT` script must be run:
+
+```sql
+ALTER TABLE new_table_name
+DROP CONSTRAINT constraint_name;
+```
+
+#### `CHECK`
+##### Create `CHECK` constraint
+##### Drop `CHECK` constraint
+
+#### `DEFAULT`
+##### Create `DEFAULT` constraint
+##### Drop `DEFAULT` constraint
+
+TODO: Enable / Disable / Validate / Novalidate constraints. Syntax & effects.
 
 ## 5. Special query clauses
 
