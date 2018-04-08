@@ -219,6 +219,15 @@ Chapter contents:
 - Similar data types
 - Same order of columns
 
+### Query example for union operations
+
+```sql
+CREATE TABLE final_table AS
+SELECT * FROM table_1
+{UNION [ALL]|INTERSECT|MINUS}
+SELECT * from table_2;
+```
+
 ### 2.1. `UNION [ALL]`
 
 `UNION` operator returns only distinct rows that appear in either result. `ALL` operator does not eliminate duplicate rows.
@@ -230,15 +239,6 @@ Yields only those rows returned by both queries.
 ### 2.3. `MINUS`
 
 Yields only unique rows returned by the first query but not the second.
-
-### Query example for union operations
-
-```sql
-CREATE TABLE final_table AS
-SELECT * FROM table_1
-{UNION [ALL]|INTERSECT|MINUS}
-SELECT * from table_2;
-```
 
 ## 3. Window functions
 
@@ -330,9 +330,11 @@ The following constraints are commonly used in SQL:
 
 Constraints may exist in either of these 4 states:
 
-
+> TODO: Enable / Disable / Validate / Novalidate constraints. Syntax & effects.
 
 > **Modifying constraints:** There is no way of modifying a constraint. In order to modify it, you will need to drop it and re-create it.
+
+> **Creating constraints inline vs. using CONSTRAINT clause:** Creating **constraints inline** is, generally, **bad practice**. By not providing a constraint name, Oracle provides a **default constraint name**. This will make it much harder to identify it later in case it needs to be dropped or modified.
 
 **What is the difference between a `UNIQUE` constraint and a `PRIMARY KEY`?**
 
@@ -386,7 +388,7 @@ A unique constraint is a single field or combination of fields that uniquely def
 ##### Create `UNIQUE` constraint
 
 ```sql
--- In CREATE TABLE statement (single column(s), no constraint name):
+-- In CREATE TABLE statement (single column(s), inline - no constraint name):
 CREATE TABLE table_name
 (
     column1 datatype [UNIQUE],
@@ -407,7 +409,7 @@ CREATE TABLE table_name
     CONSTRAINT constraint_name UNIQUE (uc_col1 [, uc_col2, ... uc_col_n])
 );
 
--- In ALTER TABLE statement (single column(s), no constraint name):
+-- In ALTER TABLE statement (single column(s), inline - no constraint name):
 ALTER TABLE table_name
 MODIFY (column1 datatype [UNIQUE], column2 datatype [UNIQUE], ...);
 /* Same reasoning as CREATE TABLE applies */
@@ -420,7 +422,7 @@ ADD CONSTRAINT constraint_name UNIQUE (uc_col1 [, uc_col2, ... uc_col_n]);
 ##### Drop `UNIQUE` constraint
 
 ```sql
--- In ALTER TABLE statement (single column(s), no constraint name):
+-- In ALTER TABLE statement (single column(s), inline - no constraint name):
 ALTER TABLE table_name
 DROP UNIQUE(column1)
 DROP UNIQUE(column2)
@@ -437,7 +439,7 @@ In Oracle, a primary key is a single field or combination of fields that **uniqu
 ##### Create `PRIMARY KEY` constraint
 
 ```sql
--- In CREATE TABLE statement (single column, no constraint name):
+-- In CREATE TABLE statement (single column, inline - no constraint name):
 CREATE TABLE table_name
 (
     id datatype PRIMARY KEY,
@@ -454,7 +456,7 @@ CREATE TABLE table_name
     CONSTRAINT constraint_name PRIMARY KEY (column1 [, column2, ... column_n])
 );
 
--- In ALTER TABLE statement (single column, no constraint name):
+-- In ALTER TABLE statement (single column, inline - no constraint name):
 ALTER TABLE table_name
 MODIFY (id datatype PRIMARY KEY);
 
@@ -466,7 +468,7 @@ ADD CONSTRAINT constraint_name PRIMARY KEY (column1 [, column2, ... column_n]);
 ##### Drop `PRIMARY KEY` constraint
 
 ```sql
--- In ALTER TABLE statement (single/multiple column/s, no constraint name):
+-- In ALTER TABLE statement (single/multiple column/s, inline - no constraint name):
 ALTER TABLE table_name
 DELETE PRIMARY KEY;
 
@@ -483,13 +485,17 @@ For example, say we have two tables, a `CUSTOMER` table that includes all custom
 ##### Create `FOREIGN KEY` constraint
 
 ```sql
--- In CREATE TABLE statement (single column, no constraint name):
+-- In CREATE TABLE statement (single column, inline - no constraint name):
 CREATE TABLE ORDERS (
     Order_ID int PRIMARY KEY,
     Order_Date date,
     Customer_SID int REFERENCES CUSTOMER(SID), -- FOREIGN KEY constraint
     -- Single-column FOREIGN KEY == Single-column reference
-    /* In this case, since the constraint declaration is in-line, no custom constraint name has been generated. Therefore, Oracle generates a default constraint name. This is considered bad practice, since in case you need to modify the constraint, you will need to find out its name from among a list of other constraints in the USER_CONSTRAINTS table */
+    /* In this case, since the constraint declaration is in-line, no custom
+    constraint name has been generated. Therefore, Oracle generates a default
+    constraint name. This is considered bad practice, since in case you need to
+    modify the constraint, you will need to find out its name from among a list
+    of other constraints in the USER_CONSTRAINTS table */
     Amount double
 );
 
@@ -505,7 +511,7 @@ CREATE TABLE table_name
     REFERENCES parent_table(p_column1 [, p_column2, ... p_column_n])
 );
 
--- In ALTER TABLE statement (single column, no constraint name):
+-- In ALTER TABLE statement (single column, inline - no constraint name):
 ALTER TABLE ORDERS
 MODIFY (Customer_SID int REFERENCES CUSTOMER(SID));
 
@@ -526,14 +532,56 @@ DROP CONSTRAINT constraint_name;
 ```
 
 #### `CHECK`
+
+The `CHECK` constraint ensures that all values in a column satisfy certain conditions. Once defined, the database will only insert a new row or update an existing row if the new value satisfies the `CHECK` constraint.
+
+**Some considerations:**
+- A check constraint can **NOT** be defined on a **SQL View**.
+- It can **NOT** refer to columns in **other tables**.
+- It can **NOT** include a SQL **Subquery**.
+
 ##### Create `CHECK` constraint
+
+```sql
+-- In CREATE TABLE statement (single column, inline - no constraint name):
+CREATE TABLE Customer (
+    SID integer CHECK (SID > 0),
+    Last_Name varchar (30),
+    First_Name varchar(30)
+);
+
+-- In CREATE TABLE statement (single/multiple column/s, with constraint name):
+CREATE TABLE table_name
+(
+  column1 datatype null/not null,
+  column2 datatype null/not null,
+  ...
+  CONSTRAINT constraint_name
+    CHECK (column_name condition)
+);
+
+-- In ALTER TABLE statement (single column, inline - no constraint name):
+ALTER TABLE Customer
+MODIFY (SID int CHECK (SID > 0));
+
+-- In ALTER TABLE statement (single/multiple column/s, with constraint name):
+ALTER TABLE table_name
+ADD CONSTRAINT constraint_name
+    CHECK (column_name condition);
+```
+
 ##### Drop `CHECK` constraint
+
+In order to drop a `CHECK` constraint, the generic `ALTER TABLE ... DROP CONSTRAINT` script must be run:
+
+```sql
+ALTER TABLE new_table_name
+DROP CONSTRAINT constraint_name;
+```
 
 #### `DEFAULT`
 ##### Create `DEFAULT` constraint
 ##### Drop `DEFAULT` constraint
-
-TODO: Enable / Disable / Validate / Novalidate constraints. Syntax & effects.
 
 ## 5. Special query clauses
 
