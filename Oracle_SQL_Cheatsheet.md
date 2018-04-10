@@ -9,6 +9,7 @@
 5. Special query clauses
 6. Data types
 7. Global constants in Oracle SQL
+8. Functions dictionary
 
 ## 1. ETL statements
 
@@ -51,7 +52,7 @@ CREATE TABLE hr.admin_emp (
          sal        NUMBER(7,2),
          hrly_rate  NUMBER(7,2) GENERATED ALWAYS AS (sal/2080),
          comm       NUMBER(7,2),
-         deptno     NUMBER(3) NOT NULL
+         deptno     NUMBER(3) NOT NULL,
                      CONSTRAINT admin_dept_fkey REFERENCES hr.departments
                      (department_id))
    TABLESPACE admin_tbs
@@ -310,11 +311,15 @@ MODIFY (
 
 -- Renaming a column
 ALTER TABLE customers
-  RENAME COLUMN customer_name TO cname;
+    RENAME COLUMN customer_name TO cname;
 
 -- Renaming a table
 ALTER TABLE table_name
-  RENAME TO new_table_name;
+    RENAME TO new_table_name;
+
+-- Renaming a constraint
+ALTER TABLE table_name
+    RENAME CONSTRAINT constraint_name TO new_constraint_name;
 ```
 
 ### 4.2. Constraints
@@ -328,9 +333,90 @@ The following constraints are commonly used in SQL:
 - `CHECK`: Ensures that all values in a column satisfies a **specific condition**
 - `DEFAULT`: Sets a **default value** for a column when no value is specified
 
-Constraints may exist in either of these 4 states:
+#### Constraint states
 
-> TODO: Enable / Disable / Validate / Novalidate constraints. Syntax & effects.
+An integrity constraint defined on a table can be in one of the following states:
+
+- `ENABLE`, `VALIDATE`
+- `ENABLE`, `NOVALIDATE`
+- `DISABLE`, `VALIDATE`
+- `DISABLE`, `NOVALIDATE`
+
+When an integrity constraint is defined in a `CREATE TABLE` or `ALTER TABLE` statement, it can be **enabled, disabled, or validated or not validated** as determined by your specification of the `ENABLE/DISABLE` clause. If the `ENABLE/DISABLE` clause is not specified in a constraint definition, the database automatically enables and validates (`ENABLE VALIDATE`) the constraint.
+
+##### Setting the constraint states **ON** constraint creation
+
+```sql
+-- In CREATE TABLE statements:
+-- CREATE TABLE statement - anonymous constraint
+CREATE TABLE table_name (
+    column1 datatype PRIMARY KEY [ENABLE | DISABLE] [VALIDATE | NOVALIDATE],
+    column2 datatype,
+    ...
+);
+
+-- CREATE TABLE statement - named constraint
+CREATE TABLE table_name (
+    column1 datatype,
+    column2 datatype,
+    ...,
+    CONSTRAINT pk PRIMARY KEY (column1) [ENABLE | DISABLE] [VALIDATE | NOVALIDATE]
+);
+
+-- In ALTER TABLE statements:
+-- ALTER TABLE statement - anonymous constraint
+ALTER TABLE table_name
+    MODIFY (column1 datatype PRIMARY KEY [ENABLE | DISABLE] [VALIDATE | NOVALIDATE])
+;
+
+-- ALTER TABLE statement - named constraint
+ALTER TABLE table_name
+    ADD CONSTRAINT pk PRIMARY KEY (column1) [ENABLE | DISABLE] [VALIDATE | NOVALIDATE];
+```
+
+##### Setting the constraint states **AFTER** constraint creation
+
+```sql
+-- No MODIFY statement
+    -- Anonymous constraint, multiple statements
+    ALTER TABLE table_name
+        [ENABLE | DISABLE] [VALIDATE | NOVALIDATE] PRIMARY KEY KEEP INDEX,
+        [ENABLE | DISABLE] [VALIDATE | NOVALIDATE] UNIQUE (column1, column2) KEEP INDEX;
+    ;
+    -- Named constraint, multiple statements
+    ALTER TABLE table_name
+        [ENABLE | DISABLE] [VALIDATE | NOVALIDATE] CONSTRAINT pk;
+
+-- MODIFY statement
+    -- Anonymous constraint
+    ALTER TABLE table_name
+        MODIFY PRIMARY KEY | UNIQUE(column1) [ENABLE | DISABLE] [VALIDATE | NOVALIDATE];
+    -- Named constraint
+    ALTER TABLE table_name
+        MODIFY CONSTRAINT pk [ENABLE | DISABLE] [VALIDATE | NOVALIDATE];
+```
+
+##### `ENABLE` state
+
+While a constraint is enabled (`ENABLE`), no row violating the constraint can be inserted into the table.
+
+##### `DISABLE` state
+
+However, while the constraint is disabled (`DISABLE`) such a row can be inserted. This row is known as an **exception to the constraint**. If the constraint is in the `ENABLE NOVALIDATE` state, violations resulting from data entered while the constraint was disabled remain.
+
+When a `UNIQUE` or `PRIMARY KEY` is enabled (`ENABLE`), if there is no existing index, a **unique index is automatically created**. When a `UNIQUE` or `PRIMARY KEY` is disabled (`DISABLE`), the **unique index is dropped**.
+
+##### `VALIDATE` state
+
+Ensures that existing data conforms to the constraint. When a constraint is validated, all data must be checked (this can be very slow).
+
+`DISABLE VALIDATE` disables the constraint, drops the index on the constraint, and disallows any modification of the constrained columns.
+
+##### `NOVALIDATE` state
+
+Existing data does not have to conform to the constraint
+
+`DISABLE NOVALIDATE` is the same as `DISABLE`.
 
 > **Modifying constraints:** There is no way of modifying a constraint. In order to modify it, you will need to drop it and re-create it.
 
@@ -405,7 +491,7 @@ CREATE TABLE table_name
 (
     column1 datatype,
     column2 datatype,
-    ...
+    ...,
     CONSTRAINT constraint_name UNIQUE (uc_col1 [, uc_col2, ... uc_col_n])
 );
 
@@ -452,7 +538,7 @@ CREATE TABLE table_name
 (
     column1 datatype,
     column2 datatype,
-    ...
+    ...,
     CONSTRAINT constraint_name PRIMARY KEY (column1 [, column2, ... column_n])
 );
 
@@ -504,8 +590,7 @@ CREATE TABLE table_name
 (
   column1 datatype,
   column2 datatype,
-  ...
-
+  ...,
   CONSTRAINT constraint_name
     FOREIGN KEY (column1 [, column2, ... column_n])
     REFERENCES parent_table(p_column1 [, p_column2, ... p_column_n])
@@ -553,9 +638,9 @@ CREATE TABLE Customer (
 -- In CREATE TABLE statement (single/multiple column/s, with constraint name):
 CREATE TABLE table_name
 (
-  column1 datatype null/not null,
-  column2 datatype null/not null,
-  ...
+  column1 datatype,
+  column2 datatype,
+  ...,
   CONSTRAINT constraint_name
     CHECK (column_name condition)
 );
@@ -580,8 +665,90 @@ DROP CONSTRAINT constraint_name;
 ```
 
 #### `DEFAULT`
+
+The DEFAULT constraint provides a default value to a column when the INSERT INTO statement does not provide a specific value.
+
 ##### Create `DEFAULT` constraint
-##### Drop `DEFAULT` constraint
+
+The `DEFAULT` constraint may not be created through the `CONSTRAINT` statement; it is rather a column property (like `NULL|NOT NULL`):
+
+```sql
+-- In CREATE TABLE statement
+CREATE TABLE table_name
+(
+  column1 datatype DEFAULT default_value,
+  column2 datatype DEFAULT default_value,
+  ...
+);
+
+-- In ALTER TABLE statement
+ALTER TABLE table_name
+MODIFY (
+    column1 datatype DEFAULT default_value,
+    column2 datatype DEFAULT default_value
+    ...
+);
+```
+
+##### Drop (alter) `DEFAULT` constraint
+
+Analogous to `NOT NULL` constraints, the `DEFAULT` constraint may not be dropped, since a variable's `DEFAULT` value will always be `NULL` (unless otherwise specified). Therefore, in order to change the default value of a variable we use the ALTER TABLE statement to modify it. Same reasoning applies in case we need to roll the `DEFAULT` value back to the original `NULL`:
+
+```sql
+ALTER TABLE table_name
+MODIFY (
+    column1 datatype DEFAULT NULL,
+    column2 datatype DEFAULT NULL,
+    ...
+);
+```
+
+### 4.3. Indexes
+
+An index is a schema object that contains an **entry for each value** that appears in the indexed column(s) of the table or cluster and provides **direct, fast access** to rows.
+
+> **Note:** Updating a table with indexes takes more time than updating a table without (because the indexes also need an update). So, only create indexes on columns that will be frequently searched against.
+
+#### Create an index
+
+In Oracle, you are not restricted to creating indexes on only columns. You can create function-based indexes.
+
+```sql
+-- Column-based index
+CREATE [UNIQUE] INDEX index_name
+    ON table_name (column1 [, column2, ... column_n])
+    [COMPUTE STATISTICS];
+
+-- Function-based index
+CREATE [UNIQUE] INDEX index_name
+  ON table_name (function1 [, function2, ... function_n])
+  [COMPUTE STATISTICS];
+```
+
+- **`UNIQUE`:** Indicates that the combination of values in the indexed columns must be unique.
+- **`COMPUTE STATISTICS`:** It tells Oracle to collect statistics during the creation of the index. The statistics are then **used by the optimizer** to choose a **"plan of execution"** when SQL statements are executed.
+
+#### Other index commands
+
+##### Drop index
+
+```sql
+DROP INDEX index_name;
+```
+
+##### Rename index
+
+```sql
+ALTER INDEX index_name
+  RENAME TO new_index_name;
+```
+
+##### Collect statistics on an index
+
+```sql
+ALTER INDEX index_name
+  REBUILD COMPUTE STATISTICS;
+```
 
 ## 5. Special query clauses
 
@@ -652,8 +819,8 @@ If the contents of the `WITH` clause are sufficiently complex, Oracle may decide
 ### 5.2. `LIKE` clause
 The `LIKE` conditions specify a test involving **pattern matching**. Whereas the **equality operator (=) exactly matches** one character value to another, the `LIKE` conditions match a **portion** of one character value to another by searching the first value for the pattern specified by the second.
 
-#### Using the ESCAPE clause:
-The ESCAPE clause identifies `&` as the escape character. In the pattern, the escape character precedes the underscore. This causes Oracle to interpret the underscore literally, rather than as a special pattern matching character.
+#### Using the `ESCAPE` clause:
+The `ESCAPE` clause identifies `&` as the escape character. In the pattern, the escape character precedes the underscore. This causes Oracle to interpret the underscore literally, rather than as a special pattern matching character.
 
 The following example searches for employees with the pattern `A_B` in their name:
 
@@ -729,4 +896,142 @@ Chapter contents:
 | `date`       | A date between Jan 1, 4712 BC and Dec 31, 9999 AD.       |
 | `timestamp` (fractional seconds precision)  | Fractional seconds precision must be a number between 0 and 9 (default is 6). Includes year, month, day, hour, minute, and seconds. For example: `timestamp(6)`  |
 
-## 7. Global constants in Oracle SQL
+## 7. Variables and constants in Oracle SQL
+
+Declaring global variables (constants) in Oracle SQL is a bit more complicated than in SAS - it will require a bit of PL/SQL programming.
+
+### Some general points
+
+#### Declaration section
+
+You can only have declarations in the declaration section, which is found between the `IS | AS | DECLARE` keyword and the `BEGIN` keyword (which kicks off the **executable section**) or `END` keyword if declaring elements at the **package level**.
+
+```sql
+/* Anonymous and nested blocks*/
+DECLARE
+   ...declarations...
+BEGIN
+
+/* Procedures and functions */
+PROCEDURE my_proc (...)
+IS | AS -- Equivalent
+   ...declarations...
+BEGIN
+
+/* Package specification and body */
+PACKAGE my_pkg
+IS | AS -- Equivalent
+   ...declarations...
+END;
+```
+
+So to be clear: there is an explicit `DECLARE` section only for unnamed blocks.
+
+Other languages let you declare variables anywhere, right when you need them. You can get a similar effect, with **nested anonymous blocks**, as in:
+
+```sql
+BEGIN
+   ... lots of code ...
+
+   DECLARE
+      l_newvar INTEGER;
+   BEGIN
+      ... use and then discard ...
+   END;
+END;
+```
+
+Notice that the **nested block** also means that you do not have to "front load" all declarations for a big procedure or function at the top. Instead, you can **defer declaring elements** until they are needed (either within the nested block or inside a nested subprogram).
+
+#### One variable / constant per declaration
+
+You can only define **one variable or constant per declaration**. Suppose, for example, that I need to declare two integer variables.
+
+```sql
+-- This works
+DECLARE
+   l_var1 INTEGER;
+   l_var2 INTEGER;
+
+-- Neither of these will compile
+DECLARE
+   l_var1, l_var2 INTEGER; -- WRONG!
+   INTEGER l_var2, v_var2; -- WRONG!
+```
+
+### Anchored Declarations
+
+Don't repeat yourself, use only a Single Point Of Definition. If you already defined a column with a given datatype, just use it in the variable declaration. So if you need to declare a **variable or constant** with the **same type** as a (and usually to hold a value from) **column** in a table, you should literally declare it that way with the `%TYPE` anchor:
+
+```sql
+DECLARE
+   l_name employees.last_name%TYPE;
+   c_hdate CONSTANT employees.hire_date%TYPE;
+```
+
+If you need to declare a **record with the same structure as an entire row** in a table or view, go with `%ROWTYPE`:
+
+```sql
+DECLARE
+   l_employee employees%ROWTYPE;
+```
+
+### Variables
+
+A variable declaration always specifies the name and data type of the variable. For most data types, a variable declaration can also specify an initial value. If you include the NOT NULL constraint in the declaration, then you must provide an initial value (as with a constant, see below).
+
+```sql
+DECLARE
+   /* Initial value set to NULL by default */
+   l_max_salary  NUMBER;
+
+   /* Assigning an initial static value */
+   l_min_salary  NUMBER := 10000;
+
+   /* Assigning an initial value with a function call */
+   l_hire_date   DATE := SYSDATE;
+```
+
+> **Tip #1:** Use **consistent naming conventions** for your variables and constants. For example, I generally use a **"g_"** prefix on **global** variables (declared at the package level), **"l_"** for **local** variables, and **"c_"** for **constants**.
+
+> **Tip #2:** If you find yourself declaring a whole lot of variables with similar names, they probably belong "together" - in which case consider declaring a user-defined record type. Here's an example:
+
+```sql
+-- Instead of this...
+DECLARE
+   l_name1           VARCHAR2 (100);
+   l_total_sales1    NUMBER;
+   l_deliver_pref1   VARCHAR2 (10);
+   --
+   l_name2           VARCHAR2 (100);
+   l_total_sales2    NUMBER;
+   l_deliver_pref2   VARCHAR2 (10);
+BEGIN
+
+-- Try something like this...
+DECLARE
+   TYPE customer_info_rt IS RECORD (
+      name           VARCHAR2 (100),
+      total_sales    NUMBER,
+      deliver_pref   VARCHAR2 (10)
+   );
+
+   l_customer1   customer_info_rt;
+   l_customer2   customer_info_rt;
+```
+
+### Constants
+
+The expression to the right of the assignment in a constant declaration **does not have to be a literal**. It can be any expression that evaluates, implicitly or explicitly, to the correct datatype.
+
+```sql
+DECLARE
+   c_date CONSTANT DATE := DATE '2011-10-30';
+BEGIN
+```
+
+## 8. Functions dictionary
+
+| Function | Description     |
+| :------------- | :------------- |
+| Item One       | Item Two       |
