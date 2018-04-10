@@ -900,6 +900,36 @@ Chapter contents:
 
 Declaring global variables (constants) in Oracle SQL is a bit more complicated than in SAS - it will require a bit of PL/SQL programming.
 
+The general structure of a PL/SQL script is as follows:
+
+```SQL
+-- Option 1: Named package specification + body
+CREATE [OR REPLACE] PACKAGE schema_name.package_name [IS | AS]
+    /* ... Declarations ... */
+    /* ... PL/SQL procedure calls/definitions ... */
+END;
+/
+
+-- Option 2: Named procedures
+CREATE [OR REPLACE] PROCEDURE procedure_name [(arg1 type1, arg2 type2, ...)] [IS | AS]
+    /* ... Declarations ... */
+BEGIN
+    /* ... PL/SQL code blocks ... */
+    [EXECUTE IMMEDIATE ('(DDL statements...)')]
+    -- Use EXECUTE IMMEDIATE to run normal SQL queries, for instance
+END;
+/
+
+-- Option 3: Anonymous blocks
+DECLARE
+    /* ... Declarations ... */
+BEGIN
+    /* ... PL/SQL code blocks ... */
+    [EXECUTE IMMEDIATE ('(DDL statements...)')]
+END;
+/
+```
+
 ### Some general points
 
 #### Declaration section
@@ -907,21 +937,22 @@ Declaring global variables (constants) in Oracle SQL is a bit more complicated t
 You can only have declarations in the declaration section, which is found between the `IS | AS | DECLARE` keyword and the `BEGIN` keyword (which kicks off the **executable section**) or `END` keyword if declaring elements at the **package level**.
 
 ```sql
-/* Anonymous and nested blocks*/
+
+/* Anonymous and nested blocks */
 DECLARE
-   ...declarations...
+    /* ... Declarations ... */
 BEGIN
 
 /* Procedures and functions */
-PROCEDURE my_proc (...)
+CREATE OR REPLACE PROCEDURE my_proc (...)
 IS | AS -- Equivalent
-   ...declarations...
+    /* ... Declarations ... */
 BEGIN
 
 /* Package specification and body */
-PACKAGE my_pkg
+CREATE OR REPLACE PACKAGE my_schema.my_pkg
 IS | AS -- Equivalent
-   ...declarations...
+   /* ... Declarations ... */
 END;
 ```
 
@@ -931,12 +962,12 @@ Other languages let you declare variables anywhere, right when you need them. Yo
 
 ```sql
 BEGIN
-   ... lots of code ...
+   /* ... lots of code ... */
 
    DECLARE
       l_newvar INTEGER;
    BEGIN
-      ... use and then discard ...
+      /* ... use and then discard ... */
    END;
 END;
 ```
@@ -1032,6 +1063,80 @@ BEGIN
 
 ## 8. Functions dictionary
 
+### Some basic functions
+
+- **`DECODE`:**
+
+    The Oracle/PLSQL `DECODE` function has the functionality of an `IF-THEN-ELSE` statement. The `DECODE` function returns a value that is the **same datatype as the first result in the list**.
+
+    `DECODE(expression , search , result [, search , result]... [, default])`
+
+- **`TO_CHAR`:**
+
+    The conversion function converts both numerical data and `date` data to datatype `varchar2`.
+
+    `TO_CHAR(data [, format])`
+
+- **`TO_DATE`:**
+
+    The `to_date()` Oracle conversion function is used to convert character data to the `date` datatype.
+
+    `TO_DATE(data [, format])`
+
+- **`TO_NUMBER`:**
+
+    The `to_number()` Oracle conversion function converts data of type `char` or `varchar2` to type `number`.
+
+    `TO_NUMBER(data [, format])`
+
+### String functions
+
 | Function | Description     |
 | :------------- | :------------- |
-| Item One       | Item Two       |
+| `INSTR(string, substring [, start_position [, nth_appearance]])`       | Returns the location of a substring in a string       |
+| `LENGTH(str)`  | Returns the length of the specified string  |
+| `LOWER(str)`  | Converts all letters in the specified string to lowercase  |
+| `LPAD(string1, padded_length [, pad_string])`  | Pads the left-side of a string with a specific set of characters  |
+| `LTRIM(string1 [, trim_string])`  | Removes all specified characters from the left-hand side of a string  |
+| `REPLACE(string1, string_to_replace [, replacement_string])`  | Replaces a sequence of characters in a string with another set of characters  |
+| `RPAD(string1, padded_length [, pad_string])`  | Pads the right-side of a string with a specific set of characters  |
+| `RTRIM(string1 [, trim_string ])`  | Removes all specified characters from the right-hand side of a string  |
+| `SUBSTR(string, start_position [, length])`  | Allows you to extract a substring from a string  |
+| `TRANSLATE(string1, string_to_replace, replacement_string)`  | Replaces a sequence of characters in a string with another set of characters, **on a character by character basis**.  |
+| `TRIM([ [ LEADING | TRAILING | BOTH ] trim_character FROM ] string1)`  | Removes all specified characters either from the beginning or the end of a string  |
+| `UPPER(str)`  | Converts all letters in the specified string to uppercase  |
+
+### Numeric Functions
+
+| Function | Description     |
+| :------------- | :------------- |
+| `ABS(number)`  | Returns the absolute value of a number  |
+| `AVG(expression)`  | Returns the average value of an expression  |
+| `CEIL(number)`  | Returns the smallest integer value that is greater than or equal to a number  |
+| `EXP(number)`  | Returns `e` raised to the power of `number`  |
+| `FLOOR(number)`  | 	Returns the largest integer value that is equal to or less than a number  |
+| `GREATEST(expr1 [, expr2, ... expr_n])`  | Returns the greatest value in a list of expressions  |
+| `LEAST(expr1 [, expr2, ... expr_n])`   | Returns the smallest value in a list of expressions  |
+| `LN(number) ` | Returns the natural logarithm of a number  |
+| `LOG(m, n)`  | Returns the logarithm of a number `m` to a specified base `n` |
+| `MEDIAN(expression)`  | Returns the median of an expression  |
+| `MOD(m, n)`  | Returns the remainder of `m` divided by `n`  |
+| `POWER(m, n)`  | Returns `m` raised to the `n`th power  |
+| `ROUND(number [, int_places])`  | Returns a number rounded to a certain number of decimal places  |
+| `ROWNUM` (no arguments)  | Returns a number that represents the order that a row is  |
+| `SIGN(number)`  | Returns a value indicating the sign of a number  |
+| `SQRT(number)`  | Returns the square root of a number  |
+| `TRUNC(n1 [, n2])`  | Returns number `n1` truncated to a `n2` number of decimal places  |
+
+### Date Functions
+
+| Function | Description     |
+| :------------- | :------------- |
+| `ADD_MONTHS(date, integer)`  | `ADD_MONTHS` returns the date `date` plus `integer` months.  |
+| `LAST_DAY(date)`  | Returns the last day of the month based on a date value  |
+| `MONTHS_BETWEEN(date1, date2)`  | The Oracle/PLSQL `MONTHS_BETWEEN` function returns the number of months between `date1` and `date2`. If a fractional month is calculated, the `MONTHS_BETWEEN` function calculates the fraction based on a 31-day month.  |
+| `NEXT_DAY(date, wkdy)`  | Returns the first weekday `wkdy` that is greater than a date  |
+| `ROUND(date [, fmt])`  | Returns a date rounded to a specific unit of measure specified by the format model `fmt` |
+| `SYSDATE` (no arguments) | Returns the current system date and time on your local database  |
+| `SYSTIMESTAMP` (no arguments) | Returns the current system date and time (including fractional seconds and time zone) on your local database  |
+| `TRUNC(date [, fmt])`  | Returns a date truncated to a specific unit of measure specified by the format model `fmt` |
